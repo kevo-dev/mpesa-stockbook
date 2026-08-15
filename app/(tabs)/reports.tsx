@@ -1,20 +1,73 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import { Card, Chip, EmptyState, KeyValue, LoadingScreen, PrimaryButton, Screen, SectionTitle } from "@/components/stockbook/ui";
-import { formatKes, getReportMetrics, isLowStock } from "@/lib/stockbook/calculations";
+import { Card, Chip, EmptyState, KeyValue, LoadingScreen, OperationNotice, PrimaryButton, Screen, SectionTitle } from "@/components/stockbook/ui";
+import { ExpenseSummaryChart, SalesExpenseTrendChart } from "@/components/stockbook/report-charts";
+import { formatKes, getReportMetrics, getReportTrend, isLowStock } from "@/lib/stockbook/calculations";
 import { shareReportCsv, shareReportPdf } from "@/lib/stockbook/export";
 import { useStockbook } from "@/lib/stockbook/store";
 import { useColors } from "@/hooks/use-colors";
 
 type Period = "today" | "week" | "month" | "all";
+type Notice = { status: "working" | "success"; title: string; detail: string };
+
 export default function ReportsScreen() {
-  const { state, ready } = useStockbook(); const colors = useColors(); const [period, setPeriod] = useState<Period>("today");
+  const { state, ready } = useStockbook();
+  const colors = useColors();
+  const [period, setPeriod] = useState<Period>("today");
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   if (!ready) return <LoadingScreen />;
-  const report = getReportMetrics(state, period); const maxPayment = Math.max(1, ...report.paymentBreakdown.map((item) => item.amount)); const low = state.products.filter((product) => !product.isArchived && isLowStock(product));
-  const exportCsv = async () => { try { await shareReportCsv(state, period); } catch (error) { Alert.alert("Could not share CSV", error instanceof Error ? error.message : "Try again on your device."); } };
-  const exportPdf = async () => { try { await shareReportPdf(state, period); } catch (error) { Alert.alert("Could not create PDF", error instanceof Error ? error.message : "Try again on your device."); } };
-  return <Screen><View style={styles.header}><View><Text style={[styles.title, { color: colors.text }]}>Reports</Text><Text style={{ color: colors.muted, marginTop: 3 }}>Simple numbers for better decisions</Text></View><View style={[styles.icon, { backgroundColor: `${colors.primary}16` }]}><MaterialIcons name="insights" size={22} color={colors.primary} /></View></View><View style={styles.chips}>{(["today", "week", "month", "all"] as const).map((item) => <Chip key={item} label={item === "all" ? "All time" : item[0].toUpperCase() + item.slice(1)} selected={period === item} onPress={() => setPeriod(item)} />)}</View><View style={styles.metricGrid}><ReportMetric label="Total sales" value={formatKes(report.totalSales)} /><ReportMetric label="Expenses" value={formatKes(report.totalExpenses)} danger /><ReportMetric label="Est. net profit" value={formatKes(report.estimatedProfit)} success={report.estimatedProfit >= 0} /></View><Card style={styles.note}><MaterialIcons name="info-outline" color={colors.primary} size={18} /><Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18, flex: 1 }}>Estimated profit uses your entered buying and selling prices. It is not formal accounting advice.</Text></Card><SectionTitle title="Payment mix" />{report.paymentBreakdown.map((item) => <View key={item.method} style={styles.barRow}><View style={styles.barLabel}><Text style={{ color: colors.text, fontWeight: "700" }}>{item.method === "mpesa" ? "M-Pesa" : item.method[0].toUpperCase() + item.method.slice(1)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatKes(item.amount)}</Text></View><View style={[styles.track, { backgroundColor: colors.border }]}><View style={[styles.fill, { backgroundColor: item.method === "mpesa" ? colors.warning : item.method === "credit" ? colors.error : colors.primary, width: `${Math.max(0, (item.amount / maxPayment) * 100)}%` }]} /></View></View>)}<SectionTitle title="Top products" />{report.topProducts.length ? <Card>{report.topProducts.map((item, index) => <View key={item.name} style={[styles.topItem, index !== report.topProducts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}><View style={[styles.rank, { backgroundColor: `${colors.primary}16` }]}><Text style={{ color: colors.primary, fontWeight: "800" }}>{index + 1}</Text></View><View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: "800" }}>{item.name}</Text><Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>{item.quantity} sold</Text></View><Text style={{ color: colors.text, fontWeight: "800" }}>{formatKes(item.amount)}</Text></View>)}</Card> : <EmptyState icon="bar-chart" title="No sales in this period" detail="Record sales to see your strongest products and payment mix." />}{report.expenseBreakdown.length ? <><SectionTitle title="Expense categories" /><Card>{report.expenseBreakdown.map((item) => <KeyValue key={item.category} label={item.category} value={formatKes(item.amount)} />)}</Card></> : null}<SectionTitle title="Stock watch" />{low.length ? <Card>{low.slice(0, 5).map((product) => <KeyValue key={product.id} label={product.name} value={`${product.quantity} left · ${formatKes(product.quantity * product.buyingPrice)}`} />)}</Card> : <Card><Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 10 }}>No low-stock products right now.</Text></Card>}<View style={styles.exports}><PrimaryButton label="Share CSV" icon="table-view" onPress={() => void exportCsv()} /><PrimaryButton label="Share PDF report" icon="picture-as-pdf" tone="quiet" onPress={() => void exportPdf()} /></View></Screen>;
+  const report = getReportMetrics(state, period);
+  const trend = getReportTrend(state, period);
+  const maxPayment = Math.max(1, ...report.paymentBreakdown.map((item) => item.amount));
+  const low = state.products.filter((product) => !product.isArchived && isLowStock(product));
+
+  const exportCsv = async () => {
+    try {
+      setExporting("csv");
+      setNotice({ status: "working", title: "Preparing CSV", detail: "Formatting your selected report period for sharing." });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await shareReportCsv(state, period);
+      setNotice({ status: "success", title: "CSV ready to share", detail: "Your device share sheet has opened with the report data." });
+    } catch (error) {
+      setNotice(null);
+      Alert.alert("Could not share CSV", error instanceof Error ? error.message : "Try again on your device.");
+    } finally { setExporting(null); }
+  };
+
+  const exportPdf = async () => {
+    try {
+      setExporting("pdf");
+      setNotice({ status: "working", title: "Creating PDF report", detail: "Building a clear, printable summary from your selected period." });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await shareReportPdf(state, period);
+      setNotice({ status: "success", title: "PDF ready to share", detail: "Your device share sheet has opened with the printable report." });
+    } catch (error) {
+      setNotice(null);
+      Alert.alert("Could not create PDF", error instanceof Error ? error.message : "Try again on your device.");
+    } finally { setExporting(null); }
+  };
+
+  return <Screen>
+    <View style={styles.header}><View><Text style={[styles.title, { color: colors.text }]}>Reports</Text><Text style={{ color: colors.muted, marginTop: 3 }}>Simple numbers for better decisions</Text></View><View style={[styles.icon, { backgroundColor: `${colors.primary}16` }]}><MaterialIcons name="insights" size={22} color={colors.primary} /></View></View>
+    {notice ? <OperationNotice {...notice} /> : null}
+    <View style={styles.chips}>{(["today", "week", "month", "all"] as const).map((item) => <Chip key={item} label={item === "all" ? "All time" : item[0].toUpperCase() + item.slice(1)} selected={period === item} onPress={() => setPeriod(item)} />)}</View>
+    <View style={styles.metricGrid}><ReportMetric label="Total sales" value={formatKes(report.totalSales)} /><ReportMetric label="Expenses" value={formatKes(report.totalExpenses)} danger /><ReportMetric label="Est. net profit" value={formatKes(report.estimatedProfit)} success={report.estimatedProfit >= 0} /></View>
+    <Card style={styles.note}><MaterialIcons name="info-outline" color={colors.primary} size={18} /><Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18, flex: 1 }}>Estimated profit uses your entered buying and selling prices. It is not formal accounting advice.</Text></Card>
+    <SectionTitle title="Performance trend" />
+    <SalesExpenseTrendChart points={trend} />
+    <SectionTitle title="Payment mix" />
+    {report.paymentBreakdown.map((item) => <View key={item.method} style={styles.barRow}><View style={styles.barLabel}><Text style={{ color: colors.text, fontWeight: "700" }}>{item.method === "mpesa" ? "M-Pesa" : item.method[0].toUpperCase() + item.method.slice(1)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatKes(item.amount)}</Text></View><View style={[styles.track, { backgroundColor: colors.border }]}><View style={[styles.fill, { backgroundColor: item.method === "mpesa" ? colors.warning : item.method === "credit" ? colors.error : colors.primary, width: `${Math.max(0, (item.amount / maxPayment) * 100)}%` }]} /></View></View>)}
+    <SectionTitle title="Top products" />
+    {report.topProducts.length ? <Card>{report.topProducts.map((item, index) => <View key={item.name} style={[styles.topItem, index !== report.topProducts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}><View style={[styles.rank, { backgroundColor: `${colors.primary}16` }]}><Text style={{ color: colors.primary, fontWeight: "800" }}>{index + 1}</Text></View><View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: "800" }}>{item.name}</Text><Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>{item.quantity} sold</Text></View><Text style={{ color: colors.text, fontWeight: "800" }}>{formatKes(item.amount)}</Text></View>)}</Card> : <EmptyState icon="bar-chart" title="No sales in this period" detail="Record sales to see your strongest products and payment mix." />}
+    {report.expenseBreakdown.length ? <><SectionTitle title="Expense summary" /><ExpenseSummaryChart items={report.expenseBreakdown} /><SectionTitle title="Expense categories" /><Card>{report.expenseBreakdown.map((item) => <KeyValue key={item.category} label={item.category} value={formatKes(item.amount)} />)}</Card></> : null}
+    <SectionTitle title="Stock watch" />
+    {low.length ? <Card>{low.slice(0, 5).map((product) => <KeyValue key={product.id} label={product.name} value={`${product.quantity} left · ${formatKes(product.quantity * product.buyingPrice)}`} />)}</Card> : <Card><Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 10 }}>No low-stock products right now.</Text></Card>}
+    <View style={styles.exports}><PrimaryButton label={exporting === "csv" ? "Preparing CSV…" : "Share CSV"} icon={exporting === "csv" ? "sync" : "table-view"} onPress={() => void exportCsv()} disabled={exporting !== null} /><PrimaryButton label={exporting === "pdf" ? "Creating PDF…" : "Share PDF report"} icon={exporting === "pdf" ? "sync" : "picture-as-pdf"} tone="quiet" onPress={() => void exportPdf()} disabled={exporting !== null} /></View>
+  </Screen>;
 }
+
 function ReportMetric({ label, value, danger, success }: { label: string; value: string; danger?: boolean; success?: boolean }) { const colors = useColors(); return <Card style={styles.metric}><Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700" }}>{label}</Text><Text style={{ color: danger ? colors.error : success ? colors.success : colors.text, fontSize: 16, fontWeight: "800", marginTop: 7 }} numberOfLines={1}>{value}</Text></Card>; }
+
 const styles = StyleSheet.create({ header: { paddingTop: 10, marginBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, title: { fontSize: 25, fontWeight: "800", letterSpacing: -0.5 }, icon: { height: 43, width: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 13 }, metricGrid: { flexDirection: "row", gap: 8 }, metric: { flex: 1, padding: 11, minHeight: 82 }, note: { flexDirection: "row", gap: 9, alignItems: "center", marginTop: 12, padding: 12 }, barRow: { marginBottom: 12 }, barLabel: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }, track: { height: 9, borderRadius: 5, overflow: "hidden" }, fill: { height: "100%", borderRadius: 5 }, topItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 }, rank: { width: 29, height: 29, borderRadius: 10, alignItems: "center", justifyContent: "center" }, exports: { marginTop: 6 } });

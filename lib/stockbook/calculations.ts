@@ -146,6 +146,68 @@ export function getReportMetrics(state: StockbookState, period: "today" | "week"
   };
 }
 
+export type ReportTrendPoint = { key: string; label: string; sales: number; expenses: number };
+
+function localStart(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function addDays(date: Date, amount: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+function transactionDate(value: string): Date {
+  const key = toDateKey(value);
+  return new Date(`${key}T12:00:00`);
+}
+
+function trendPoint(state: StockbookState, start: Date, end: Date, label: string, key: string): ReportTrendPoint {
+  const contains = (value: string) => {
+    const date = transactionDate(value);
+    return date.getTime() >= start.getTime() && date.getTime() < end.getTime();
+  };
+  return {
+    key,
+    label,
+    sales: state.sales.filter((sale) => contains(sale.saleDate)).reduce((sum, sale) => sum + sale.totalAmount, 0),
+    expenses: state.expenses.filter((expense) => contains(expense.expenseDate)).reduce((sum, expense) => sum + expense.amount, 0),
+  };
+}
+
+export function getReportTrend(state: StockbookState, period: "today" | "week" | "month" | "all", now = new Date()): ReportTrendPoint[] {
+  const current = localStart(now);
+  if (period === "today") {
+    return [trendPoint(state, current, addDays(current, 1), "Today", toDateKey(current))];
+  }
+  if (period === "week") {
+    const start = startOfPeriod("week", now);
+    const count = Math.max(1, Math.floor((current.getTime() - start.getTime()) / 86_400_000) + 1);
+    return Array.from({ length: count }, (_, index) => {
+      const bucketStart = addDays(start, index);
+      return trendPoint(state, bucketStart, addDays(bucketStart, 1), new Intl.DateTimeFormat("en-KE", { weekday: "short" }).format(bucketStart), toDateKey(bucketStart));
+    });
+  }
+  if (period === "month") {
+    const monthStart = startOfPeriod("month", now);
+    const points: ReportTrendPoint[] = [];
+    for (let bucketStart = monthStart; bucketStart <= current; bucketStart = addDays(bucketStart, 7)) {
+      const bucketEnd = addDays(bucketStart, 7);
+      points.push(trendPoint(state, bucketStart, bucketEnd, `W${points.length + 1}`, toDateKey(bucketStart)));
+    }
+    return points;
+  }
+  const firstMonth = new Date(current.getFullYear(), current.getMonth() - 5, 1);
+  return Array.from({ length: 6 }, (_, index) => {
+    const bucketStart = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + index, 1);
+    const bucketEnd = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + index + 1, 1);
+    return trendPoint(state, bucketStart, bucketEnd, new Intl.DateTimeFormat("en-KE", { month: "short" }).format(bucketStart), `${bucketStart.getFullYear()}-${bucketStart.getMonth() + 1}`);
+  });
+}
+
 export function buildTimeline(state: StockbookState): TimelineItem[] {
   const sales: TimelineItem[] = state.sales.map((sale) => ({
     id: sale.id,

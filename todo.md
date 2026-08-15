@@ -20,3 +20,6 @@
 - [x] Keep Daraja live sync disabled with clear setup guidance until official credentials are configured
 - [x] Perform senior QA audit across onboarding, inventory, sales, expenses, credit, reports, import/export, dark mode, persistence, navigation, validation, calculations, and layouts
 - [x] Fix every confirmed QA defect without removing existing functionality and document the final test results
+- [x] Add loading animations and success feedback for CSV import and report CSV/PDF export
+- [x] Add accessible sales-trend and expense-summary charts to Reports
+- [x] Package the completed mobile QA and enhancement workflow as a reusable skill

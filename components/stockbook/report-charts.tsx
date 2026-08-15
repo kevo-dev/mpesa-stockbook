@@ -1,0 +1,22 @@
+import { StyleSheet, Text, View } from "react-native";
+import { Card } from "@/components/stockbook/ui";
+import { useColors } from "@/hooks/use-colors";
+import { formatKes, type ReportTrendPoint } from "@/lib/stockbook/calculations";
+
+export function SalesExpenseTrendChart({ points }: { points: ReportTrendPoint[] }) {
+  const colors = useColors();
+  const maximum = Math.max(1, ...points.flatMap((point) => [point.sales, point.expenses]));
+  const hasActivity = points.some((point) => point.sales > 0 || point.expenses > 0);
+  return <Card><View style={styles.heading}><View><Text style={[styles.title, { color: colors.text }]}>Sales & expenses over time</Text><Text style={[styles.detail, { color: colors.muted }]}>Each pair compares recorded sales with expenses.</Text></View><View style={styles.legend}><Legend color={colors.primary} label="Sales" /><Legend color={colors.error} label="Expenses" /></View></View>{hasActivity ? <View style={styles.chart} accessibilityRole="image" accessibilityLabel={points.map((point) => `${point.label}: sales ${formatKes(point.sales)}, expenses ${formatKes(point.expenses)}`).join(". ")}>{points.map((point) => <View key={point.key} style={styles.column}><View style={styles.rails}><View style={styles.rail}><View style={[styles.bar, { height: `${Math.max(point.sales > 0 ? 8 : 0, (point.sales / maximum) * 100)}%`, backgroundColor: colors.primary }]} /></View><View style={styles.rail}><View style={[styles.bar, { height: `${Math.max(point.expenses > 0 ? 8 : 0, (point.expenses / maximum) * 100)}%`, backgroundColor: colors.error }]} /></View></View><Text style={[styles.label, { color: colors.muted }]} numberOfLines={1}>{point.label}</Text></View>)}</View> : <Text style={[styles.empty, { color: colors.muted }]}>Record sales or expenses in this period to see a trend.</Text>}</Card>;
+}
+
+export function ExpenseSummaryChart({ items }: { items: { category: string; amount: number }[] }) {
+  const colors = useColors();
+  const visible = items.slice(0, 4);
+  const maximum = Math.max(1, ...visible.map((item) => item.amount));
+  return <Card><Text style={[styles.title, { color: colors.text }]}>Where expenses went</Text><Text style={[styles.detail, { color: colors.muted }]}>Largest categories for the selected period.</Text>{visible.map((item) => <View key={item.category} style={styles.summaryRow}><View style={styles.summaryLabel}><Text style={[styles.category, { color: colors.text }]} numberOfLines={1}>{item.category}</Text><Text style={[styles.amount, { color: colors.muted }]}>{formatKes(item.amount)}</Text></View><View style={[styles.summaryTrack, { backgroundColor: colors.border }]}><View style={[styles.summaryFill, { width: `${Math.max(3, (item.amount / maximum) * 100)}%`, backgroundColor: colors.warning }]} /></View></View>)}</Card>;
+}
+
+function Legend({ color, label }: { color: string; label: string }) { return <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: color }]} /><Text style={styles.legendText}>{label}</Text></View>; }
+
+const styles = StyleSheet.create({ heading: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 16 }, title: { fontSize: 15, fontWeight: "800" }, detail: { fontSize: 12, lineHeight: 17, marginTop: 3 }, legend: { alignItems: "flex-end", gap: 4 }, legendItem: { flexDirection: "row", alignItems: "center", gap: 5 }, dot: { width: 7, height: 7, borderRadius: 4 }, legendText: { fontSize: 10, color: "#607169", fontWeight: "700" }, chart: { height: 160, flexDirection: "row", alignItems: "flex-end", gap: 6 }, column: { flex: 1, minWidth: 24, alignItems: "center", gap: 6 }, rails: { height: 132, flexDirection: "row", alignItems: "flex-end", gap: 3, width: "100%" }, rail: { flex: 1, height: "100%", justifyContent: "flex-end", backgroundColor: "rgba(96,113,105,0.10)", borderRadius: 5, overflow: "hidden" }, bar: { width: "100%", minHeight: 0, borderRadius: 5 }, label: { fontSize: 10, fontWeight: "700", maxWidth: 44, textAlign: "center" }, empty: { paddingVertical: 32, textAlign: "center", fontSize: 13, lineHeight: 19 }, summaryRow: { marginTop: 14 }, summaryLabel: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 6 }, category: { flex: 1, fontSize: 13, fontWeight: "700" }, amount: { fontSize: 12, fontWeight: "700" }, summaryTrack: { height: 10, borderRadius: 5, overflow: "hidden" }, summaryFill: { height: "100%", borderRadius: 5 } });
