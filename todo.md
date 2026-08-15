@@ -18,3 +18,5 @@
 - [x] Replace oversized custom launcher artwork with lightweight default assets for checkpoint compatibility
 - [x] Add secure official Safaricom/M-Pesa live transaction connection and reconciliation workflow
 - [x] Keep Daraja live sync disabled with clear setup guidance until official credentials are configured
+- [x] Perform senior QA audit across onboarding, inventory, sales, expenses, credit, reports, import/export, dark mode, persistence, navigation, validation, calculations, and layouts
+- [x] Fix every confirmed QA defect without removing existing functionality and document the final test results

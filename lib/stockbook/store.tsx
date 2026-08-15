@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { demoState, emptyState } from "./seed";
 import type { BusinessProfile, CreditPayment, Customer, ExpenseInput, MpesaImportRow, ProductInput, Sale, SaleInput, StockbookState } from "./types";
+import { isRestorableStockbookState, parseLocalDate } from "./validation";
+import { getCreditBalance } from "./calculations";
 
 const STORAGE_KEY = "mpesa-stockbook.state.v1";
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -43,7 +45,11 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
       if (saved) {
-        try { setState(JSON.parse(saved) as StockbookState); } catch { AsyncStorage.removeItem(STORAGE_KEY); }
+        try {
+          const parsed = JSON.parse(saved) as unknown;
+          if (isRestorableStockbookState(parsed)) setState(parsed);
+          else void AsyncStorage.removeItem(STORAGE_KEY);
+        } catch { void AsyncStorage.removeItem(STORAGE_KEY); }
       }
     }).finally(() => setReady(true));
   }, []);
@@ -77,9 +83,13 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
 
   const updateProduct = useCallback((productId: string, input: ProductInput) => {
     commit((current) => {
+      const existing = current.products.find((product) => product.id === productId);
+      if (!existing) throw new Error("That product could not be found.");
       if (!input.name.trim()) throw new Error("Add a product name before saving.");
       if ([input.buyingPrice, input.sellingPrice, input.quantity, input.lowStockThreshold].some((value) => value < 0 || !Number.isFinite(value))) throw new Error("Prices and stock values cannot be negative.");
-      return { next: { ...current, products: current.products.map((product) => product.id === productId ? { ...product, ...input, updatedAt: now() } : product) }, result: undefined };
+      const timestamp = now();
+      const adjustment = input.quantity === existing.quantity ? [] : [{ id: id("adjustment"), productId, quantityBefore: existing.quantity, quantityChange: input.quantity - existing.quantity, quantityAfter: input.quantity, reason: "Quantity updated in product editor", createdAt: timestamp }];
+      return { next: { ...current, products: current.products.map((product) => product.id === productId ? { ...product, ...input, updatedAt: timestamp } : product), stockAdjustments: [...adjustment, ...current.stockAdjustments] }, result: undefined };
     });
   }, [commit]);
 
@@ -87,8 +97,9 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
     commit((current) => {
       const source = current.products.find((product) => product.id === productId);
       if (!source) throw new Error("That product could not be found.");
+      if (current.settings.plan === "free" && current.products.filter((product) => !product.isArchived).length >= 30) throw new Error("The free plan allows up to 30 products. Archive a product before making a copy.");
       const timestamp = now();
-      const copy = { ...source, id: id("product"), name: `${source.name} copy`, sku: "", createdAt: timestamp, updatedAt: timestamp };
+      const copy = { ...source, id: id("product"), name: `${source.name} copy`, sku: "", createdAt: timestamp, updatedAt: timestamp, isArchived: false };
       return { next: { ...current, products: [copy, ...current.products] }, result: undefined };
     });
   }, [commit]);
@@ -115,16 +126,19 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
       const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
       if (current.sales.filter((sale) => new Date(sale.saleDate) >= start).length >= 50) throw new Error("The free plan allows 50 recorded sales this month. The upgrade path is not active yet.");
     }
-    const discount = Math.max(0, Number(input.discount ?? 0));
+    const suppliedDiscount = Number(input.discount ?? 0);
+    if (!Number.isFinite(suppliedDiscount) || suppliedDiscount < 0) throw new Error("The discount must be a number that is zero or greater.");
+    const discount = suppliedDiscount;
     const saleId = id("sale");
-    const items = input.items.map((draft) => {
-      const product = current.products.find((entry) => entry.id === draft.productId && !entry.isArchived);
+    const groupedItems = input.items.reduce<Record<string, number>>((grouped, draft) => ({ ...grouped, [draft.productId]: (grouped[draft.productId] ?? 0) + draft.quantity }), {});
+    const items = Object.entries(groupedItems).map(([productId, quantity]) => {
+      const product = current.products.find((entry) => entry.id === productId && !entry.isArchived);
       if (!product) throw new Error("One of the selected products is unavailable.");
-      if (!Number.isFinite(draft.quantity) || draft.quantity <= 0) throw new Error("Sale quantities must be greater than zero.");
-      if (draft.quantity > product.quantity && !current.settings.allowNegativeStock) throw new Error(`${product.name} has only ${product.quantity} in stock.`);
-      const subtotal = draft.quantity * product.sellingPrice;
-      const cost = draft.quantity * product.buyingPrice;
-      return { id: id("sale-item"), saleId, productId: product.id, productNameSnapshot: product.name, quantity: draft.quantity, buyingPriceSnapshot: product.buyingPrice, sellingPriceSnapshot: product.sellingPrice, subtotal, profit: subtotal - cost };
+      if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Sale quantities must be greater than zero.");
+      if (quantity > product.quantity && !current.settings.allowNegativeStock) throw new Error(`${product.name} has only ${product.quantity} in stock.`);
+      const subtotal = quantity * product.sellingPrice;
+      const cost = quantity * product.buyingPrice;
+      return { id: id("sale-item"), saleId, productId: product.id, productNameSnapshot: product.name, quantity, buyingPriceSnapshot: product.buyingPrice, sellingPriceSnapshot: product.sellingPrice, subtotal, profit: subtotal - cost };
     });
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
     if (discount > subtotal) throw new Error("The discount cannot be higher than the sale subtotal.");
@@ -133,6 +147,7 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
     let customers = current.customers;
     if (input.paymentMethod === "credit") {
       if (!input.customerName?.trim()) throw new Error("Add the customer name for a credit sale.");
+      if (input.dueDate?.trim()) parseLocalDate(input.dueDate, "Due date");
       const existing = customers.find((customer) => customer.name.trim().toLowerCase() === input.customerName?.trim().toLowerCase());
       if (existing) customerId = existing.id;
       else {
@@ -143,7 +158,8 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
       }
     }
     const timestamp = input.saleDate || now();
-    const sale: Sale = { id: saleId, totalAmount: subtotal - discount, totalCost, estimatedProfit: subtotal - discount - totalCost, discount, paymentMethod: input.paymentMethod, mpesaCode: input.mpesaCode?.trim(), customerId, notes: input.notes?.trim(), saleDate: timestamp, createdAt: now(), items };
+    if (Number.isNaN(new Date(timestamp).getTime())) throw new Error("The sale date is invalid.");
+    const sale: Sale = { id: saleId, totalAmount: subtotal - discount, totalCost, estimatedProfit: subtotal - discount - totalCost, discount, paymentMethod: input.paymentMethod, mpesaCode: input.mpesaCode?.trim().toUpperCase() || undefined, customerId, notes: input.notes?.trim(), saleDate: timestamp, createdAt: now(), items };
     return { next: { ...current, customers, sales: [sale, ...current.sales], products: current.products.map((product) => {
       const item = items.find((entry) => entry.productId === product.id);
       return item ? { ...product, quantity: product.quantity - item.quantity, updatedAt: now() } : product;
@@ -189,6 +205,10 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
   const addCreditPayment = useCallback((input: Omit<CreditPayment, "id" | "createdAt">) => {
     commit((current) => {
       if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+      if (!current.customers.some((customer) => customer.id === input.customerId)) throw new Error("That customer could not be found.");
+      const balance = getCreditBalance(current, input.customerId);
+      if (balance <= 0) throw new Error("This customer does not have an outstanding balance.");
+      if (input.amount > balance) throw new Error(`The payment is higher than the outstanding balance of ${balance.toFixed(2)}.`);
       const payment = { ...input, id: id("credit-payment"), createdAt: now() };
       return { next: { ...current, creditPayments: [payment, ...current.creditPayments] }, result: undefined };
     });
@@ -198,16 +218,29 @@ export function StockbookProvider({ children }: { children: ReactNode }) {
 
   const importMpesa = useCallback((rows: MpesaImportRow[]) => commit((current) => {
     const seen = new Set(current.mpesaTransactions.map((transaction) => transaction.transactionCode));
-    const unique = rows.filter((row) => row.transactionCode && !seen.has(row.transactionCode));
+    const unique: MpesaImportRow[] = [];
+    let duplicates = 0;
+    for (const row of rows) {
+      const transactionCode = row.transactionCode.trim().toUpperCase();
+      if (!transactionCode || seen.has(transactionCode)) { duplicates += 1; continue; }
+      seen.add(transactionCode);
+      unique.push({ ...row, transactionCode });
+    }
     const transactions = unique.map((row) => ({ ...row, id: id("mpesa"), importedAt: now() }));
-    return { next: { ...current, mpesaTransactions: [...transactions, ...current.mpesaTransactions] }, result: { imported: transactions.length, duplicates: rows.length - transactions.length } };
+    return { next: { ...current, mpesaTransactions: [...transactions, ...current.mpesaTransactions] }, result: { imported: transactions.length, duplicates } };
   }), [commit]);
 
-  const matchMpesa = useCallback((transactionId: string, saleId: string) => commit((current) => ({ next: { ...current, mpesaTransactions: current.mpesaTransactions.map((transaction) => transaction.id === transactionId ? { ...transaction, matchedSaleId: saleId } : transaction) }, result: undefined })), [commit]);
+  const matchMpesa = useCallback((transactionId: string, saleId: string) => commit((current) => {
+    const transaction = current.mpesaTransactions.find((entry) => entry.id === transactionId);
+    const sale = current.sales.find((entry) => entry.id === saleId);
+    if (!transaction) throw new Error("That M-Pesa transaction could not be found.");
+    if (!sale || sale.paymentMethod !== "mpesa") throw new Error("Choose a recorded M-Pesa sale to match this transaction.");
+    return { next: { ...current, mpesaTransactions: current.mpesaTransactions.map((entry) => entry.id === transactionId ? { ...entry, matchedSaleId: saleId } : entry) }, result: undefined };
+  }), [commit]);
 
   const updateSettings = useCallback((input: Partial<StockbookState["settings"]>) => commit((current) => ({ next: { ...current, settings: { ...current.settings, ...input } }, result: undefined })), [commit]);
   const replaceState = useCallback((next: StockbookState) => {
-    if (!next || next.schemaVersion !== 1 || !Array.isArray(next.products) || !Array.isArray(next.sales)) throw new Error("This backup does not look like an M-Pesa StockBook export.");
+    if (!isRestorableStockbookState(next)) throw new Error("This backup is incomplete or does not look like an M-Pesa StockBook export.");
     commit(() => ({ next, result: undefined }));
   }, [commit]);
   const clearData = useCallback(() => commit(() => ({ next: emptyState(), result: undefined })), [commit]);

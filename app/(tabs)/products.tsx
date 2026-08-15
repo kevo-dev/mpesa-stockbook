@@ -2,8 +2,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Card, Chip, EmptyState, LoadingScreen, Money, PrimaryButton, Screen, SectionTitle } from "@/components/stockbook/ui";
-import { formatKes, isLowStock, productMargin, productProfit, stockValue } from "@/lib/stockbook/calculations";
+import { Card, Chip, EmptyState, LoadingScreen, PrimaryButton, Screen } from "@/components/stockbook/ui";
+import { formatKes, isLowStock, productMargin, productProfit } from "@/lib/stockbook/calculations";
 import { useStockbook } from "@/lib/stockbook/store";
 import { useColors } from "@/hooks/use-colors";
 

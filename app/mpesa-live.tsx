@@ -6,7 +6,6 @@ import { Alert, ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Card, KeyValue, LoadingScreen, PrimaryButton, Screen, SectionTitle, TopBar } from "@/components/stockbook/ui";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { useColors } from "@/hooks/use-colors";
-import { formatKes } from "@/lib/stockbook/calculations";
 import { useStockbook } from "@/lib/stockbook/store";
 import type { MpesaImportRow } from "@/lib/stockbook/types";
 

@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { Card, Chip, EmptyState, KeyValue, LoadingScreen, PrimaryButton, Screen, SectionTitle } from "@/components/stockbook/ui";
 import { formatKes, getReportMetrics, isLowStock } from "@/lib/stockbook/calculations";
 import { shareReportCsv, shareReportPdf } from "@/lib/stockbook/export";

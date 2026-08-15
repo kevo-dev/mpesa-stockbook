@@ -52,8 +52,8 @@ export function detectMpesaMapping(headers: string[]): MpesaMapping {
 const asAmount = (value?: string) => Number((value ?? "0").replace(/[^0-9.-]/g, "")) || 0;
 
 export function mapMpesaRows(rows: Record<string, string>[], mapping: MpesaMapping): MpesaImportRow[] {
-  return rows.map((row, index) => ({
-    transactionCode: row[mapping.transactionCode ?? ""]?.trim() || `UNNAMED-${index + 1}`,
+  return rows.map((row) => ({
+    transactionCode: row[mapping.transactionCode ?? ""]?.trim().toUpperCase() || "",
     transactionDate: row[mapping.transactionDate ?? ""]?.trim(),
     transactionTime: row[mapping.transactionTime ?? ""]?.trim(),
     description: row[mapping.description ?? ""]?.trim(),

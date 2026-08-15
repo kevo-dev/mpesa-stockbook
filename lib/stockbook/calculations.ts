@@ -12,7 +12,9 @@ export function formatKes(amount: number): string {
 }
 
 export function toDateKey(value: string | Date): string {
-  return new Date(value).toISOString().slice(0, 10);
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 export function todayKey(): string {
@@ -100,7 +102,13 @@ export function getCreditBalance(state: StockbookState, customerId: string): num
 export function customerHasOverdueCredit(state: StockbookState, customer: Customer): boolean {
   const threshold = new Date();
   threshold.setDate(threshold.getDate() - 30);
-  return getCreditBalance(state, customer.id) > 0 && state.sales.some((sale) => sale.customerId === customer.id && new Date(sale.saleDate) < threshold);
+  let paymentsRemaining = state.creditPayments.filter((payment) => payment.customerId === customer.id).reduce((sum, payment) => sum + payment.amount, 0);
+  const creditSales = state.sales.filter((sale) => sale.customerId === customer.id && sale.paymentMethod === "credit").sort((a, b) => new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime());
+  for (const sale of creditSales) {
+    if (paymentsRemaining >= sale.totalAmount) { paymentsRemaining -= sale.totalAmount; continue; }
+    if (new Date(sale.saleDate) < threshold) return true;
+  }
+  return false;
 }
 
 export function getReportMetrics(state: StockbookState, period: "today" | "week" | "month" | "all") {
