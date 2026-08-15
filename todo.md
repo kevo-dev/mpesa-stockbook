@@ -23,4 +23,4 @@
 - [x] Add loading animations and success feedback for CSV import and report CSV/PDF export
 - [x] Add accessible sales-trend and expense-summary charts to Reports
 - [x] Package the completed mobile QA and enhancement workflow as a reusable skill
-- [ ] Commit and push the latest M-Pesa StockBook source to GitHub
+- [x] Commit and push the latest M-Pesa StockBook source to GitHub
