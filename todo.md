@@ -1,0 +1,18 @@
+# Project TODO
+
+- [x] Configure app identity, package configuration, theme, and branded icon assets
+- [x] Implement offline domain models and persisted local store with seeded sample data
+- [x] Build onboarding and local business-profile setup
+- [x] Build dashboard with daily metrics, quick actions, recent activity, and Close Today summary
+- [x] Build product list, search, filters, sorting, product editor, duplicate, delete confirmation, and stock adjustment
+- [x] Build fast multi-item sales flow with cash, M-Pesa, and credit payment details, stock reduction, and receipt sharing
+- [x] Build expense dashboard, validation, editor, category grouping, and time-period totals
+- [x] Build unified transaction timeline, filters, details, safe edit/delete, and inventory reconciliation
+- [x] Build credit book, customer profile, payment recording, overdue indicators, and user-triggered contact actions
+- [x] Build reports with sales, profit, expense, payment, product, low-stock, and credit insights
+- [x] Build report CSV/PDF-style export payloads and system sharing workflows
+- [x] Build flexible M-Pesa CSV import preview, manual column mapping, duplicate detection, and sale matching queue
+- [x] Build Settings, light/dark appearance, data export/import, help copy, and guarded clear-data action
+- [x] Add automated tests for money calculations, inventory adjustments, report aggregates, persistence, and CSV parsing
+- [x] Verify all primary flows and mobile portrait layouts with deterministic tests
+- [x] Replace oversized custom launcher artwork with lightweight default assets for checkpoint compatibility

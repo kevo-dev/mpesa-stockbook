@@ -1,48 +1,26 @@
-import { ScrollView, Text, View, TouchableOpacity } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Redirect, router } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Card, LoadingScreen, MetricCard, PrimaryButton, Screen, SectionTitle } from "@/components/stockbook/ui";
+import { buildTimeline, formatKes, getDashboardMetrics } from "@/lib/stockbook/calculations";
+import { useStockbook } from "@/lib/stockbook/store";
+import { useColors } from "@/hooks/use-colors";
 
-import { ScreenContainer } from "@/components/screen-container";
-
-/**
- * Home Screen - NativeWind Example
- *
- * This template uses NativeWind (Tailwind CSS for React Native).
- * You can use familiar Tailwind classes directly in className props.
- *
- * Key patterns:
- * - Use `className` instead of `style` for most styling
- * - Theme colors: use tokens directly (bg-background, text-foreground, bg-primary, etc.); no dark: prefix needed
- * - Responsive: standard Tailwind breakpoints work on web
- * - Custom colors defined in tailwind.config.js
- */
-export default function HomeScreen() {
-  return (
-    <ScreenContainer className="p-6">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="flex-1 gap-8">
-          {/* Hero Section */}
-          <View className="items-center gap-2">
-            <Text className="text-4xl font-bold text-foreground">Welcome</Text>
-            <Text className="text-base text-muted text-center">
-              Edit app/(tabs)/index.tsx to get started
-            </Text>
-          </View>
-
-          {/* Example Card */}
-          <View className="w-full max-w-sm self-center bg-surface rounded-2xl p-6 shadow-sm border border-border">
-            <Text className="text-lg font-semibold text-foreground mb-2">NativeWind Ready</Text>
-            <Text className="text-sm text-muted leading-relaxed">
-              Use Tailwind CSS classes directly in your React Native components.
-            </Text>
-          </View>
-
-          {/* Example Button */}
-          <View className="items-center">
-            <TouchableOpacity className="bg-primary px-6 py-3 rounded-full active:opacity-80">
-              <Text className="text-background font-semibold">Get Started</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </ScreenContainer>
-  );
+export default function DashboardScreen() {
+  const { state, ready } = useStockbook();
+  const colors = useColors();
+  if (!ready) return <LoadingScreen />;
+  if (!state.onboarded) return <Redirect href={"/onboarding" as any} />;
+  const metrics = getDashboardMetrics(state);
+  const activity = buildTimeline(state).slice(0, 4);
+  const date = new Intl.DateTimeFormat("en-KE", { weekday: "long", day: "numeric", month: "short" }).format(new Date());
+  return <Screen><View style={styles.heading}><View><Text style={[styles.greeting, { color: colors.text }]} numberOfLines={1}>{state.profile?.businessName || "Your stockbook"}</Text><Text style={[styles.date, { color: colors.muted }]}>{date}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push("/settings" as any)} style={({ pressed }) => [styles.avatar, { backgroundColor: `${colors.primary}18`, opacity: pressed ? 0.65 : 1 }]}><MaterialIcons name="settings" size={21} color={colors.primary} /></Pressable></View><Card style={[styles.salesHero, { backgroundColor: colors.primary, borderColor: colors.primary }]}><Text style={styles.heroLabel}>Today’s sales</Text><Text style={styles.heroAmount}>{formatKes(metrics.totalSales)}</Text><View style={styles.heroFooter}><Text style={styles.heroFooterText}>{metrics.transactionCount} transaction{metrics.transactionCount === 1 ? "" : "s"}</Text><Text style={styles.heroFooterText}>{metrics.itemsSold} item{metrics.itemsSold === 1 ? "" : "s"} sold</Text></View></Card><View style={styles.quickRow}><QuickAction icon="receipt-long" label="Record Sale" onPress={() => router.push("/sale" as any)} /><QuickAction icon="add-box" label="Add Product" onPress={() => router.push("/product-form" as any)} /><QuickAction icon="payments" label="Add Expense" onPress={() => router.push("/expense-form" as any)} /><QuickAction icon="bar-chart" label="View Report" onPress={() => router.push("/(tabs)/reports" as any)} /></View><View style={styles.metrics}><MetricCard label="Est. net profit" value={formatKes(metrics.estimatedProfit)} tone={metrics.estimatedProfit >= 0 ? "positive" : "warning"} /><MetricCard label="Today’s expenses" value={formatKes(metrics.totalExpenses)} /></View><View style={styles.metrics}><MetricCard label="Cash sales" value={formatKes(metrics.cashSales)} /><MetricCard label="M-Pesa sales" value={formatKes(metrics.mpesaSales)} /></View><View style={styles.metrics}><MetricCard label="Credit sales" value={formatKes(metrics.creditSales)} /><MetricCard label="Stock value" value={formatKes(metrics.stockValue)} /></View><Card style={[styles.lowCard, { backgroundColor: metrics.lowStockCount ? `${colors.warning}16` : colors.surface }]}><View style={styles.lowRow}><View style={[styles.lowIcon, { backgroundColor: `${colors.warning}24` }]}><MaterialIcons name="inventory" size={20} color={colors.warning} /></View><View style={{ flex: 1 }}><Text style={[styles.lowTitle, { color: colors.text }]}>{metrics.lowStockCount ? `${metrics.lowStockCount} low-stock item${metrics.lowStockCount === 1 ? "" : "s"}` : "Stock levels look good"}</Text><Text style={[styles.lowDetail, { color: colors.muted }]}>{metrics.lowStockCount ? "Review products before you run out." : "Nothing is below its low-stock level."}</Text></View><Pressable onPress={() => router.push("/(tabs)/products" as any)} accessibilityRole="button" accessibilityLabel="View products"><MaterialIcons name="chevron-right" size={24} color={colors.muted} /></Pressable></View></Card><PrimaryButton label="Close Today" icon="event-available" onPress={() => router.push("/closing-summary" as any)} /><SectionTitle title="Recent activity" action={<Pressable onPress={() => router.push("/transactions" as any)} accessibilityRole="button"><Text style={{ color: colors.primary, fontWeight: "800" }}>See all</Text></Pressable>} />{activity.length ? <Card style={styles.activityCard}>{activity.map((item, index) => <Pressable key={`${item.type}-${item.id}`} onPress={() => router.push({ pathname: "/transaction-details" as any, params: { id: item.id, type: item.type } })} style={({ pressed }) => [styles.activityRow, index !== activity.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }, { opacity: pressed ? 0.68 : 1 }]}><View style={[styles.activityIcon, { backgroundColor: item.positive ? `${colors.success}18` : `${colors.error}14` }]}><MaterialIcons name={item.type === "sale" ? "receipt-long" : item.type === "expense" ? "payments" : item.type === "stock" ? "inventory" : "person"} size={18} color={item.positive ? colors.success : colors.error} /></View><View style={{ flex: 1 }}><Text style={[styles.activityTitle, { color: colors.text }]}>{item.title}</Text><Text style={[styles.activitySubtitle, { color: colors.muted }]}>{item.subtitle}</Text></View>{item.amount !== undefined ? <Text style={{ color: item.positive ? colors.success : colors.error, fontWeight: "800" }}>{item.positive ? "+" : "−"}{formatKes(item.amount)}</Text> : null}</Pressable>)}</Card> : <Card><Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 12 }}>Your latest sales and expenses will appear here.</Text></Card>}</Screen>;
 }
+
+function QuickAction({ icon, label, onPress }: { icon: React.ComponentProps<typeof MaterialIcons>["name"]; label: string; onPress: () => void }) {
+  const colors = useColors();
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.quick, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.68 : 1 }]}><View style={[styles.quickIcon, { backgroundColor: `${colors.primary}16` }]}><MaterialIcons name={icon} size={20} color={colors.primary} /></View><Text style={[styles.quickLabel, { color: colors.text }]} numberOfLines={2}>{label}</Text></Pressable>;
+}
+
+const styles = StyleSheet.create({ heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10, marginBottom: 16 }, greeting: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5, maxWidth: 280 }, date: { fontSize: 13, marginTop: 4 }, avatar: { height: 43, width: 43, borderRadius: 14, justifyContent: "center", alignItems: "center" }, salesHero: { padding: 20 }, heroLabel: { color: "#DCF4E7", fontWeight: "700", fontSize: 13 }, heroAmount: { color: "#FFFFFF", fontWeight: "800", fontSize: 34, lineHeight: 42, marginTop: 5, letterSpacing: -0.9 }, heroFooter: { flexDirection: "row", gap: 18, marginTop: 12 }, heroFooterText: { color: "#DCF4E7", fontSize: 12, fontWeight: "600" }, quickRow: { flexDirection: "row", gap: 9, marginTop: 14 }, quick: { borderWidth: 1, borderRadius: 15, paddingVertical: 11, paddingHorizontal: 7, flex: 1, alignItems: "center", minHeight: 94 }, quickIcon: { width: 35, height: 35, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 6 }, quickLabel: { fontSize: 11, fontWeight: "700", lineHeight: 14, textAlign: "center" }, metrics: { flexDirection: "row", gap: 10, marginTop: 10 }, lowCard: { marginTop: 12, padding: 13 }, lowRow: { flexDirection: "row", alignItems: "center", gap: 11 }, lowIcon: { height: 39, width: 39, borderRadius: 12, alignItems: "center", justifyContent: "center" }, lowTitle: { fontSize: 14, fontWeight: "800" }, lowDetail: { fontSize: 12, marginTop: 3 }, activityCard: { paddingVertical: 2 }, activityRow: { minHeight: 65, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 }, activityIcon: { height: 36, width: 36, borderRadius: 11, justifyContent: "center", alignItems: "center" }, activityTitle: { fontSize: 14, fontWeight: "700" }, activitySubtitle: { fontSize: 12, marginTop: 2 },
+});

@@ -1,0 +1,16 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import { Card, KeyValue, PrimaryButton, Screen, TopBar } from "@/components/stockbook/ui";
+import { formatKes, getDashboardMetrics } from "@/lib/stockbook/calculations";
+import { shareText } from "@/lib/stockbook/export";
+import { useStockbook } from "@/lib/stockbook/store";
+import { useColors } from "@/hooks/use-colors";
+
+export default function ClosingSummaryScreen() {
+  const { state } = useStockbook(); const colors = useColors(); const metrics = getDashboardMetrics(state); const date = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  const text = `${state.profile?.businessName || "M-Pesa StockBook"}\nClose today · ${date}\n\nSales: ${formatKes(metrics.totalSales)}\nExpenses: ${formatKes(metrics.totalExpenses)}\nEstimated net profit: ${formatKes(metrics.estimatedProfit)}\nCash: ${formatKes(metrics.cashSales)}\nM-Pesa: ${formatKes(metrics.mpesaSales)}\nCredit: ${formatKes(metrics.creditSales)}\nItems sold: ${metrics.itemsSold}\nLow-stock items: ${metrics.lowStockCount}\n\nEstimated profit is not formal accounting advice.`;
+  const share = async () => { try { await shareText("Daily closing summary", text); } catch (error) { Alert.alert("Could not share", error instanceof Error ? error.message : "Try again on your device."); } };
+  return <Screen><TopBar title="Close Today" subtitle={date} onBack={() => router.back()} /><View style={styles.hero}><View style={[styles.heroIcon, { backgroundColor: `${colors.success}18` }]}><MaterialIcons name="event-available" size={35} color={colors.success} /></View><Text style={[styles.heroLabel, { color: colors.muted }]}>Estimated net profit</Text><Text style={[styles.heroValue, { color: metrics.estimatedProfit >= 0 ? colors.success : colors.error }]}>{formatKes(metrics.estimatedProfit)}</Text></View><Card><KeyValue label="Total sales" value={formatKes(metrics.totalSales)} positive /><KeyValue label="Expenses" value={formatKes(metrics.totalExpenses)} positive={false} /><KeyValue label="Cash sales" value={formatKes(metrics.cashSales)} /><KeyValue label="M-Pesa sales" value={formatKes(metrics.mpesaSales)} /><KeyValue label="Credit sales" value={formatKes(metrics.creditSales)} /><KeyValue label="Items sold" value={String(metrics.itemsSold)} /><KeyValue label="Low-stock items" value={String(metrics.lowStockCount)} positive={metrics.lowStockCount === 0} /></Card><Text style={[styles.note, { color: colors.muted }]}>This summary does not change your data. It is a useful snapshot to review or share after closing.</Text><PrimaryButton label="Share today’s summary" icon="share" onPress={() => void share()} /><PrimaryButton label="Back to dashboard" icon="home" tone="quiet" onPress={() => router.replace("/")} /></Screen>;
+}
+const styles = StyleSheet.create({ hero: { alignItems: "center", paddingVertical: 28 }, heroIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 14 }, heroLabel: { fontSize: 14, fontWeight: "700" }, heroValue: { fontSize: 34, fontWeight: "800", marginTop: 4 }, note: { fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 14 } });
