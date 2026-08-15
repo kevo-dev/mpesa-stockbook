@@ -61,6 +61,7 @@ export default function RootLayout() {
         <Stack.Screen name="credit" />
         <Stack.Screen name="customer" options={{ presentation: "modal" }} />
         <Stack.Screen name="mpesa-import" />
+        <Stack.Screen name="mpesa-live" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="help" />
         <Stack.Screen name="upgrade" options={{ presentation: "modal" }} />

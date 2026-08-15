@@ -9,6 +9,7 @@ const items = [
   { icon: "group" as const, title: "Credit Book", detail: "Customers and repayments", route: "/credit" },
   { icon: "payments" as const, title: "Expenses", detail: "Business costs and categories", route: "/expenses" },
   { icon: "receipt-long" as const, title: "Transactions", detail: "Sales, expenses and stock", route: "/transactions" },
+  { icon: "sync" as const, title: "M-Pesa Live Sync", detail: "Official Daraja connection", route: "/mpesa-live" },
   { icon: "file-upload" as const, title: "M-Pesa Import", detail: "Import a statement CSV", route: "/mpesa-import" },
 ];
 export default function MoreScreen() {

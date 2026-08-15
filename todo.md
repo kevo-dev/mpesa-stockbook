@@ -16,3 +16,5 @@
 - [x] Add automated tests for money calculations, inventory adjustments, report aggregates, persistence, and CSV parsing
 - [x] Verify all primary flows and mobile portrait layouts with deterministic tests
 - [x] Replace oversized custom launcher artwork with lightweight default assets for checkpoint compatibility
+- [x] Add secure official Safaricom/M-Pesa live transaction connection and reconciliation workflow
+- [x] Keep Daraja live sync disabled with clear setup guidance until official credentials are configured

@@ -7,6 +7,8 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { getMpesaConnectionStatus, pullRecentMpesaTransactions } from "../mpesa";
+import { sdk } from "./sdk";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -60,6 +62,25 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  // This route intentionally discloses only readiness, never secrets or business transaction data.
+  app.get("/api/mpesa/status", (_req, res) => {
+    res.json(getMpesaConnectionStatus());
+  });
+
+  // Live statement data remains authenticated server-side. The mobile client sends only the existing
+  // workspace session token; Daraja keys are kept exclusively in environment variables.
+  app.post("/api/mpesa/sync", async (req, res) => {
+    try {
+      await sdk.authenticateRequest(req);
+      const result = await pullRecentMpesaTransactions();
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Live M-Pesa sync could not be completed.";
+      const unauthorized = message.toLowerCase().includes("session") || message.toLowerCase().includes("user not found");
+      res.status(unauthorized ? 401 : 400).json({ error: unauthorized ? "A signed-in workspace session is required for live M-Pesa data." : message });
+    }
   });
 
   app.use(
