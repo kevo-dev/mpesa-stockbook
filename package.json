@@ -1,6 +1,8 @@
 {
-  "name": "app-template",
+  "name": "mpesa-stockbook",
   "version": "1.0.0",
+  "description": "Local-first inventory, sales and M-Pesa bookkeeping for small businesses.",
+  "keywords": ["expo", "react-native", "inventory", "mpesa", "kenya", "small-business"],
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
